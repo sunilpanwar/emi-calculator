@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud-Sync Quiz</title>
+    <style>
+        :root { --primary: #4A90E2; --success: #27ae60; --danger: #e74c3c; --bg: #f0f2f5; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        #quiz-card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 90%; max-width: 450px; }
+        .option-btn { display: block; width: 100%; margin: 10px 0; padding: 15px; border: 2px solid #eee; border-radius: 10px; cursor: pointer; background: white; transition: 0.2s; font-size: 16px; }
+        .option-btn:hover:not([disabled]) { border-color: var(--primary); background: #f0f7ff; }
+        .next-btn { background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; width: 100%; display: none; margin-top: 10px; }
+        #status { margin: 15px 0; font-weight: bold; text-align: center; }
+        .loading { text-align: center; color: #666; }
+        input[type="text"] { width: 100%; padding: 12px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+
+<div id="quiz-card">
+    <div id="setup-screen">
+        <h2>Enter your name to start</h2>
+        <input type="text" id="username" placeholder="Your Name...">
+        <button class="next-btn" style="display:block;" onclick="startQuiz()">Start Quiz</button>
+    </div>
+
+    <div id="quiz-screen" style="display:none;">
+        <div id="progress" style="font-size: 12px; color: #999;"></div>
+        <h2 id="question-text">Loading...</h2>
+        <div id="options-container"></div>
+        <div id="status"></div>
+        <button id="next-button" class="next-btn" onclick="generateQuestion()">Next Question</button>
+    </div>
+
+    <div id="result-screen" style="display:none; text-align:center;">
+        <h2>Quiz Over!</h2>
+        <p id="final-score" style="font-size: 24px; font-weight: bold;"></p>
+        <p id="upload-status">Saving score to Google Sheets...</p>
+    </div>
+</div>
+
+<script>
+    const SCRIPT_URL = "YOUR_WEB_APP_URL_HERE"; // PASTE YOUR URL HERE
+    let allData = [];
+    let currentIndex = 0;
+    let score = 0;
+    let userName = "";
+
+    function startQuiz() {
+        userName = document.getElementById('username').value;
+        if (!userName) return alert("Please enter your name");
+        
+        document.getElementById('setup-screen').style.display = 'none';
+        document.getElementById('quiz-screen').style.display = 'block';
+        fetchQuestions();
+    }
+
+    function fetchQuestions() {
+        fetch(SCRIPT_URL)
+            .then(res => res.json())
+            .then(data => {
+                allData = data.map(row => ({ Question: row[0], Answer: row[1] }));
+                generateQuestion();
+            });
+    }
+
+    function generateQuestion() {
+        if (currentIndex >= allData.length || currentIndex >= 10) { // Limits to 10 questions for testing
+            endQuiz();
+            return;
+        }
+
+        document.getElementById('status').innerText = "";
+        document.getElementById('next-button').style.display = "none";
+        document.getElementById('progress').innerText = `Question ${currentIndex + 1} of ${allData.length}`;
+        
+        const currentItem = allData[currentIndex];
+        
+        // Pick 3 random distractors from other questions
+        let distractors = allData
+            .filter((_, i) => i !== currentIndex)
+            .map(item => item.Answer)
+            .sort(() => 0.5 - Math.random())
+            .slice(0, 3);
+
+        let choices = [currentItem.Answer, ...distractors].sort(() => 0.5 - Math.random());
+
+        document.getElementById('question-text').innerText = currentItem.Question;
+        const container = document.getElementById('options-container');
+        container.innerHTML = '';
+
+        choices.forEach(choice => {
+            const btn = document.createElement('button');
+            btn.className = 'option-btn';
+            btn.innerText = choice;
+            btn.onclick = () => {
+                const btns = container.querySelectorAll('button');
+                btns.forEach(b => b.disabled = true);
+                
+                if (choice === currentItem.Answer) {
+                    score++;
+                    document.getElementById('status').innerText = "✅ Correct!";
+                    document.getElementById('status').style.color = "var(--success)";
+                } else {
+                    document.getElementById('status').innerText = "❌ Wrong! Correct: " + currentItem.Answer;
+                    document.getElementById('status').style.color = "var(--danger)";
+                }
+                currentIndex++;
+                document.getElementById('next-button').style.display = "block";
+            };
+            container.appendChild(btn);
+        });
+    }
+
+    function endQuiz() {
+        document.getElementById('quiz-screen').style.display = 'none';
+        document.getElementById('result-screen').style.display = 'block';
+        document.getElementById('final-score').innerText = `${score} / ${currentIndex}`;
+        
+        // CALLING THE SAVE FUNCTION HERE
+        saveScoreToSheet();
+    }
+
+    function saveScoreToSheet() {
+        const payload = {
+            name: userName,
+            score: score
+        };
+
+        // Use 'no-cors' if you face redirect issues, though Google Apps Script usually 
+        // handles JSON posts well via fetch.
+        fetch(SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors', // Important for Google Apps Script
+            cache: 'no-cache',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).then(() => {
+            document.getElementById('upload-status').innerText = "✅ Score saved to Cloud!";
+        }).catch(err => {
+            document.getElementById('upload-status').innerText = "❌ Error saving score.";
+        });
+    }
+</script>
+</body>
+</html>
