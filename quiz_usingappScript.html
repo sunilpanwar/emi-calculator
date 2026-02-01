@@ -168,7 +168,6 @@ function searchUser() {
     resultsBody.innerHTML = "Searching...";
     table.style.display = "none";
 
-    // Call script with search parameter
     fetch(`${SCRIPT_URL}?search=${encodeURIComponent(name)}`)
         .then(res => res.json())
         .then(data => {
@@ -181,22 +180,29 @@ function searchUser() {
             table.style.display = "table";
             data.forEach(row => {
                 const tr = document.createElement('tr');
-                const dateObj = new Date(row.date);
-                // Formatting date to be readable
-                const dateStr = dateObj.toLocaleDateString() + " " + dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 
+                // Clean up the date string
+                let displayDate;
+                try {
+                    const d = new Date(row.date);
+                    // Check if date is valid, if not, use the raw string
+                    displayDate = isNaN(d) ? row.date.split('GMT')[0] : d.toLocaleDateString();
+                } catch(e) {
+                    displayDate = "N/A";
+                }
+
                 tr.innerHTML = `
-                    <td style="padding: 8px; border-bottom: 1px solid #eee;">${dateStr}</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight:bold;">${row.score}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee;">${displayDate}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight:bold;">${row.score || 0}</td>
                 `;
                 resultsBody.appendChild(tr);
             });
         })
         .catch(err => {
             console.error(err);
-            resultsBody.innerHTML = "Error fetching data.";
+            resultsBody.innerHTML = "Error fetching data. Check Console.";
         });
-}    
+}   
 </script>
 </body>
 </html>
