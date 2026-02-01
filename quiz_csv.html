@@ -2,67 +2,104 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Simple CSV Quiz</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate CSV Quiz</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; display: flex; justify-content: center; padding: 40px; }
-        #quiz-card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 500px; }
-        .option-btn { display: block; width: 100%; margin: 12px 0; padding: 15px; border: 2px solid #eee; border-radius: 10px; cursor: pointer; background: white; font-size: 16px; transition: all 0.3s; }
-        .option-btn:hover { border-color: #4A90E2; background: #f0f7ff; }
+        :root { --primary: #4A90E2; --success: #27ae60; --danger: #e74c3c; --bg: #f8f9fa; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        #quiz-card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 90%; max-width: 500px; text-align: center; }
+        .progress-box { font-size: 14px; color: #666; margin-bottom: 10px; display: flex; justify-content: space-between; }
+        h2 { margin-bottom: 20px; color: #333; line-height: 1.4; }
+        .option-btn { display: block; width: 100%; margin: 10px 0; padding: 15px; border: 2px solid #eee; border-radius: 12px; cursor: pointer; background: white; font-size: 16px; font-weight: 500; transition: all 0.2s; }
+        .option-btn:hover { border-color: var(--primary); background: #f0f7ff; transform: translateY(-2px); }
+        .option-btn:active { transform: translateY(0); }
         #status { margin-top: 20px; font-weight: bold; min-height: 24px; }
-        .next-btn { background: #4A90E2; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+        .next-btn { background: var(--primary); color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; margin-top: 15px; font-size: 14px; display: none; width: 100%; }
+        .score-board { margin-bottom: 20px; font-weight: bold; color: var(--primary); }
     </style>
 </head>
 <body>
 
 <div id="quiz-card">
-    <h2 id="question-text">Loading Quiz...</h2>
+    <div class="score-board">Score: <span id="score">0</span></div>
+    <div class="progress-box">
+        <span>Question: <span id="current-num">0</span>/1000</span>
+    </div>
+    
+    <h2 id="question-text">Loading your questions...</h2>
     <div id="options-container"></div>
     <div id="status"></div>
-    <button class="next-btn" onclick="generateQuestion()">Skip / Next Question</button>
+    <button id="next-button" class="next-btn" onclick="generateQuestion()">Next Question →</button>
 </div>
 
 <script>
     let allData = [];
+    let currentIndex = 0;
+    let score = 0;
 
-    // Fetch and Parse CSV
+    // 1. Fetch and Parse CSV
     fetch('questions.csv')
         .then(response => response.text())
         .then(text => {
-            const rows = text.split('\n').slice(1); // Remove header row
-            allData = rows.map(row => {
-                const [question, answer] = row.split(',');
-                return { Question: question?.trim(), Answer: answer?.trim() };
-            }).filter(item => item.Question && item.Answer); // Clean empty rows
-            
+            const rows = text.split('\n').filter(row => row.trim() !== ''); 
+            const data = rows.slice(1).map(row => {
+                // Handle basic CSV splitting (Question,Answer)
+                const parts = row.split(',');
+                return { 
+                    Question: parts[0]?.trim(), 
+                    Answer: parts[1]?.trim() 
+                };
+            }).filter(item => item.Question && item.Answer);
+
+            allData = data;
+            shuffleArray(allData); // Shuffle the entire deck once
             generateQuestion();
+        })
+        .catch(err => {
+            document.getElementById('question-text').innerText = "Error loading CSV. Make sure questions.csv is in the same folder!";
         });
 
+    // 2. Fisher-Yates Shuffle Algorithm (The Gold Standard)
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
     function generateQuestion() {
+        if (currentIndex >= allData.length) {
+            document.getElementById('quiz-card').innerHTML = `<h2>Complete!</h2><p>Your final score: ${score}/${allData.length}</p>`;
+            return;
+        }
+
+        // Reset UI
         document.getElementById('status').innerText = "";
+        document.getElementById('next-button').style.display = "none";
         
-        // 1. Pick Random Correct Answer
-        const mainIdx = Math.floor(Math.random() * allData.length);
-        const correctItem = allData[mainIdx];
+        const currentItem = allData[currentIndex];
         
-        // 2. Get 3 random WRONG answers from the rest of the list
-        let pool = allData.filter((_, index) => index !== mainIdx);
+        // 3. Generate 3 random WRONG answers from the pool
         let distractors = [];
+        let pool = allData.filter((_, idx) => idx !== currentIndex);
         
         while(distractors.length < 3 && pool.length > 0) {
             let randIdx = Math.floor(Math.random() * pool.length);
             let val = pool[randIdx].Answer;
-            if(!distractors.includes(val)) {
+            if(!distractors.includes(val) && val !== currentItem.Answer) {
                 distractors.push(val);
             }
             pool.splice(randIdx, 1);
         }
 
-        // 3. Shuffle
-        let choices = [correctItem.Answer, ...distractors];
-        choices.sort(() => Math.random() - 0.5);
+        // 4. Mix correct answer with distractors and shuffle buttons
+        let choices = [currentItem.Answer, ...distractors];
+        shuffleArray(choices);
 
-        // 4. Render
-        document.getElementById('question-text').innerText = correctItem.Question;
+        // 5. Update DOM
+        document.getElementById('question-text').innerText = currentItem.Question;
+        document.getElementById('current-num').innerText = currentIndex + 1;
+        
         const container = document.getElementById('options-container');
         container.innerHTML = '';
 
@@ -70,19 +107,36 @@
             const btn = document.createElement('button');
             btn.className = 'option-btn';
             btn.innerText = choice;
-            btn.onclick = () => {
-                const status = document.getElementById('status');
-                if(choice === correctItem.Answer) {
-                    status.innerHTML = "✅ Correct!";
-                    status.style.color = "#27ae60";
-                } else {
-                    status.innerHTML = "❌ Wrong! Try again or Skip.";
-                    status.style.color = "#e74c3c";
-                }
-            };
+            btn.onclick = () => checkAnswer(btn, choice, currentItem.Answer);
             container.appendChild(btn);
         });
     }
+
+    function checkAnswer(selectedBtn, selectedText, correctText) {
+        const status = document.getElementById('status');
+        const allButtons = document.querySelectorAll('.option-btn');
+        
+        // Disable all buttons after one click
+        allButtons.forEach(b => b.disabled = true);
+
+        if (selectedText === correctText) {
+            status.innerHTML = "✅ Correct!";
+            status.style.color = "var(--success)";
+            selectedBtn.style.borderColor = "var(--success)";
+            selectedBtn.style.background = "#eafaf1";
+            score++;
+            document.getElementById('score').innerText = score;
+        } else {
+            status.innerHTML = `❌ Wrong! It was: <strong>${correctText}</strong>`;
+            status.style.color = "var(--danger)";
+            selectedBtn.style.borderColor = "var(--danger)";
+            selectedBtn.style.background = "#fdf2f2";
+        }
+
+        currentIndex++;
+        document.getElementById('next-button').style.display = "block";
+    }
 </script>
+
 </body>
 </html>
