@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dynamic Excel Quiz</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; display: flex; justify-content: center; padding: 40px; }
+        #quiz-card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 500px; }
+        .option-btn { display: block; width: 100%; margin: 10px 0; padding: 12px; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; background: white; transition: 0.2s; }
+        .option-btn:hover { background: #e7f3ff; border-color: #007bff; }
+        #status { font-weight: bold; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+<div id="quiz-card">
+    <h1 id="loading">Loading Questions...</h1>
+    <div id="quiz-content" style="display:none;">
+        <h2 id="question-text">Question goes here?</h2>
+        <div id="options-container"></div>
+        <div id="status"></div>
+        <button onclick="generateQuestion()" style="margin-top:20px;">Next Question</button>
+    </div>
+</div>
+
+<script>
+    let allData = [];
+
+    // 1. Fetch the Excel file from your GitHub repository
+    // Change 'questions.xlsx' to your actual filename
+    fetch('questions.xlsx')
+        .then(res => res.arrayBuffer())
+        .then(buffer => {
+            const workbook = XLSX.read(buffer, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            allData = XLSX.utils.sheet_to_json(sheet);
+            
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('quiz-content').style.display = 'block';
+            generateQuestion();
+        });
+
+    function generateQuestion() {
+        if (allData.length < 4) {
+            alert("Not enough questions in Excel file!");
+            return;
+        }
+
+        document.getElementById('status').innerText = "";
+        
+        // 2. Pick a random question
+        const mainIdx = Math.floor(Math.random() * allData.length);
+        const correctItem = allData[mainIdx];
+        
+        // 3. Pick 3 random WRONG answers from other rows
+        let distractors = [];
+        while(distractors.length < 3) {
+            let randIdx = Math.floor(Math.random() * allData.length);
+            let potentialDistractor = allData[randIdx].Answer;
+            // Ensure it's not the same as the correct answer or already in distractors
+            if (randIdx !== mainIdx && !distractors.includes(potentialDistractor)) {
+                distractors.push(potentialDistractor);
+            }
+        }
+
+        // 4. Combine and Shuffle
+        let choices = [correctItem.Answer, ...distractors];
+        choices.sort(() => Math.random() - 0.5);
+
+        // 5. Update UI
+        document.getElementById('question-text').innerText = correctItem.Question;
+        const container = document.getElementById('options-container');
+        container.innerHTML = '';
+
+        choices.forEach(choice => {
+            const btn = document.createElement('button');
+            btn.className = 'option-btn';
+            btn.innerText = choice;
+            btn.onclick = () => checkAnswer(choice, correctItem.Answer);
+            container.appendChild(btn);
+        });
+    }
+
+    function checkAnswer(selected, correct) {
+        const status = document.getElementById('status');
+        if (selected === correct) {
+            status.innerText = "Correct! 🎉";
+            status.style.color = "green";
+        } else {
+            status.innerText = "Wrong! The correct answer was: " + correct;
+            status.style.color = "red";
+        }
+    }
+</script>
+
+</body>
+</html>
